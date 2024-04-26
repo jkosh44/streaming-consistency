@@ -1,0 +1,38 @@
+## accepted_transactions
+
+```bash
+$ wc -l results/accepted_transactions
+10000000 results/accepted_transactions
+```
+
+## outer_join
+
+```bash
+$ grep -c '\N' results/outer_join
+0
+```
+
+## credits/debits
+
+```bash
+$ awk '{print $2}' results/credits | grep -xFc "1"
+43631
+$ awk '{print $2}' results/debits | grep -xFc "1"
+43633
+```
+
+## balance
+
+```bash
+$ awk '{print $2}' results/balance | grep -xFc "1"
+42795
+```
+
+## total
+
+```bash
+$ cat results/total
+0       1       \N
+1714155826000   -1      \N
+1714155826000   1       0
+```
