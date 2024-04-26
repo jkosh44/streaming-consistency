@@ -1,22 +1,26 @@
-CREATE MATERIALIZED VIEW transactions_without_time AS
-SELECT
-    CAST(data->'id' AS INT) as id,
-    CAST(data->'from_account' AS INT) as from_account,
-    CAST(data->'to_account' AS INT) as to_account,
-    CAST(data->'amount' AS DOUBLE) as amount,
-    CAST(CAST(data->'ts' AS TEXT) AS TIMESTAMP) as ts
-FROM (
-    SELECT CAST(convert_from(data, 'utf8') AS jsonb) AS data
-    FROM transactions_source
+CREATE SECRET pgpass AS 'abc';
+CREATE CONNECTION pg_connection TO POSTGRES (
+       HOST 'postgres',
+       PORT 5432,
+       USER 'materialize',
+       PASSWORD SECRET pgpass,
+       DATABASE 'postgres'
 );
+
+CREATE SOURCE transactions_source
+  FROM POSTGRES CONNECTION pg_connection (PUBLICATION 'mz_source')
+  FOR TABLES (transactions AS raw_transactions);
 
 CREATE MATERIALIZED VIEW transactions AS
 SELECT
     *
 FROM
-    transactions_without_time
-WHERE
-    (CAST(EXTRACT(EPOCH FROM ts) AS NUMERIC) * 10000) <= mz_logical_timestamp();
+    raw_transactions;
+-- TODO: Figure out how to get temporal filters to work properly to reject some updates. The python
+-- script generates records from 2021, which is less than now - 5 seconds.
+--
+-- WHERE
+--    mz_now() <= ts + INTERVAL '5 sec';
 
 CREATE MATERIALIZED VIEW accepted_transactions AS
 SELECT
@@ -55,13 +59,10 @@ GROUP BY
 
 CREATE MATERIALIZED VIEW balance AS
 SELECT
-    credits.account AS account, 
-    credits - debits AS balance
+    COALESCE(credits.account, debits.account) AS account,
+    COALESCE(credits, 0) - COALESCE(debits, 0) AS balance
 FROM
-    credits,
-    debits
-WHERE
-    credits.account = debits.account;
+    credits FULL OUTER JOIN debits ON credits.account = debits.account;
 
 CREATE MATERIALIZED VIEW total AS
 SELECT
